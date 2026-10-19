@@ -1,0 +1,987 @@
+You are modifying the existing SpiderPanel project in this repository. First inspect the entire existing codebase and understand the current Nodes, Inbounds, Auto Config, authentication, API, config-generation, and worker/tunnel architecture before making changes.
+
+IMPORTANT:
+
+	•	Do NOT create a separate standalone system.
+	•	Reuse the existing Node management, authentication, API helpers, styling system, accordion components, modal system, config-generation logic, and backend architecture wherever possible.
+	•	Preserve all existing SpiderPanel functionality.
+	•	Do not break existing Nodes/Inbounds/Auto Config.
+	•	The new feature must be fully functional, not a UI mockup.
+	•	Implement both frontend and backend.
+	•	Make the design consistent with the existing SpiderPanel UI.
+	•	Mobile/touch usage is a first-class requirement.
+
+FEATURE: Tunnel Management / TM
+
+Add a completely new main navigation tab:
+
+TM / Tunnel Management
+
+The navigation label should be:
+
+	•	Tunnel Management
+	•	Short name: TM
+
+When the user opens TM, show a secondary navigation bar at the top with exactly two sections:
+
+	1.	Server
+	2.	Configure
+
+The user can switch between them without leaving TM.
+
+⸻
+
+1. TM → SERVER
+
+This section manages remote SpiderPanel servers/nodes.
+
+Reuse the existing Node API and Node storage where appropriate instead of duplicating the same functionality.
+
+Add server
+
+Provide an “Add Server” button.
+
+The form must support:
+
+	•	Server name
+	•	Domain
+	•	API Key
+
+The server should be represented internally as a TM node/server.
+
+The domain may be entered with or without:
+
+	•	http://
+	•	https://
+
+Normalize it before storage.
+
+API key must never be exposed in plaintext in the UI after saving.
+
+Server list
+
+Every added server must appear as an accordion/card.
+
+Each server accordion should contain:
+
+	•	Server name
+	•	Domain
+	•	Online/offline state
+	•	Ping/latency
+	•	Edit
+	•	Delete
+	•	Ping/Test
+
+The accordion must be touch friendly.
+
+The existing SpiderPanel accordion style should be reused.
+
+The server card should have a clean compact layout on mobile.
+
+Ping
+
+There must be a dedicated Ping button.
+
+IMPORTANT:
+
+There are TWO different ping concepts and they must NOT be confused:
+
+A) Client-side ping:
+This is the ping shown in TM Configure and must originate from the user’s device/browser/network.
+
+B) Server/API health:
+This is the backend health check of the remote server.
+
+Do not use the server’s own CPU/network/process to pretend it is the user’s ping.
+
+⸻
+
+2. TM → CONFIGURE
+
+This is the main visual tunnel-chain editor.
+
+Create a large interactive canvas with a subtle grid background.
+
+The canvas must support:
+
+	•	Zoom in
+	•	Zoom out
+	•	Touch-friendly interaction
+	•	Pan
+	•	Server movement
+	•	Connections between servers
+	•	Visual chain editing
+
+Put the + and − zoom controls in the bottom-right corner.
+
+Add a reset/fit-to-screen control if useful.
+
+Server nodes
+
+Every server added in Server must automatically appear as a node in Configure.
+
+Each node must be a rounded box containing at minimum:
+
+	•	Server name
+	•	Current client-side latency
+	•	Expand/collapse button
+	•	Set button
+
+The node should look like a real visual graph node, not a normal HTML card list.
+
+Nodes must be draggable.
+
+On touch devices, use long press / touch drag behavior so that accidental scrolling does not move a node.
+
+Do NOT make the user drag the page itself when they are trying to move a node.
+
+⸻
+
+3. NODE ACCORDION
+
+Each server node must have a small button that opens an accordion/popover attached to that node.
+
+When opened, show:
+
+	•	Server name
+	•	Domain
+	•	Current client-side ping
+	•	Server status
+	•	Edit
+	•	Ping
+	•	Set
+
+The Set button means:
+
+“Use this server as the server for generating the configuration.”
+
+Only one server should be the active “Set” server at a time unless the existing architecture explicitly requires otherwise.
+
+Clearly show which server is currently Set.
+
+If Set is selected, configuration generation must actually use that server.
+
+Do not implement Set as a visual-only state.
+
+⸻
+
+4. CLIENT-SIDE PING — VERY IMPORTANT
+
+The ping displayed in the TM Configure nodes MUST be measured from the user’s device/browser that opened the SpiderPanel.
+
+It MUST NOT be:
+
+	•	a ping measured by the remote server
+	•	a ping measured by the SpiderPanel backend
+	•	a ping between two backend servers
+	•	a value returned by the remote server as its own latency
+
+The browser should initiate the measurement.
+
+Implement a practical browser-compatible latency measurement using the remote server’s reachable HTTP/HTTPS endpoint/API.
+
+For example:
+
+Browser
+↓
+Remote Server
+
+Measure request/response latency.
+
+Use multiple samples when appropriate and display a stable result rather than one noisy measurement.
+
+Example:
+
+Ping: 84 ms
+
+If the browser cannot reach the server, display:
+
+Offline / Timeout
+
+Do not falsely report a ping.
+
+The backend/server-side health check can remain separate and should not overwrite the client-side latency.
+
+⸻
+
+5. VISUAL SERVER CONNECTIONS
+
+Servers can be connected together visually.
+
+The user must be able to create a connection:
+
+Server A → Server B
+
+Connections must be real application state, not SVG decoration.
+
+A connection should be represented by a line between the nodes.
+
+Support:
+
+	•	Straight line
+	•	Curved line
+
+The line should have physically natural-looking movement when nodes are dragged.
+
+Use SVG/canvas/another appropriate graph layer.
+
+The line must remain attached to the correct nodes while they move.
+
+Connections must update live while dragging.
+
+Connections must be removable.
+
+Prevent invalid connections such as:
+
+	•	Server → itself
+	•	duplicate identical edges
+	•	obvious cyclic routing if the routing architecture cannot safely support cycles
+
+Prefer a DAG/chain topology.
+
+⸻
+
+6. SMART CHAIN ARCHITECTURE
+
+The TM system represents a multi-server tunnel chain.
+
+Each server must understand its role automatically based on the graph.
+
+There are three logical roles:
+
+	1.	Initial / Entry
+	2.	Middle / Relay
+	3.	Final / Exit
+
+Do NOT make the administrator manually configure every server’s role.
+
+Infer the role from graph topology.
+
+Example:
+
+A → B → C
+
+Then:
+
+A = Initial
+B = Middle
+C = Final
+
+If:
+
+A → B
+
+Then:
+
+A = Initial
+B = Final
+
+If:
+
+A
+
+with no outgoing connection:
+
+A = Initial + Final
+
+If:
+
+A → B → C → D
+
+Then:
+
+A = Initial
+B = Middle
+C = Middle
+D = Final
+
+The graph is the source of truth.
+
+⸻
+
+7. SMART ROUTING BEHAVIOR
+
+The routing logic must be generated from the graph.
+
+The first/initial server creates the client-facing configuration.
+
+If the initial server has NO next server:
+
+Client
+↓
+Initial server
+↓
+Destination website
+
+If the initial server has a next server:
+
+Client
+↓
+Initial server
+↓
+Next server
+↓
+Destination website
+
+For:
+
+A → B → C
+
+Traffic should logically become:
+
+Client
+↓
+A
+↓
+B
+↓
+C
+↓
+Destination
+
+The administrator should NOT have to manually specify “initial”, “middle”, and “final” for every node.
+
+The graph determines this.
+
+⸻
+
+8. TM DEFAULT INBOUND
+
+When Tunnel Management is first initialized, automatically create/provision a dedicated TM inbound.
+
+Its logical name should be:
+
+TM
+
+This inbound must be integrated into the existing inbound/config system.
+
+Do not create a fake frontend-only inbound.
+
+It must actually participate in configuration generation.
+
+The TM inbound should expose the available initial servers.
+
+The initial server selection should be based on the current TM graph.
+
+⸻
+
+9. TM PATH ROUTING
+
+The initial server’s TM route should use:
+
+ws/TM/uuid
+
+when there is no next server.
+
+This should route directly to the destination through the initial server.
+
+If the initial server has a next server, the route should become:
+
+ws/nextTM/uuid
+
+and traffic should be forwarded to the next server.
+
+The next server must know which subsequent TM route to use based on the graph.
+
+For example:
+
+A → B → C
+
+The system should derive something equivalent to:
+
+A:
+ws/nextTM/uuid
+↓
+B
+
+B:
+next TM hop
+↓
+C
+
+C:
+final destination
+
+Do NOT hard-code only one or two servers.
+
+The algorithm must work for arbitrary chain lengths.
+
+⸻
+
+10. UUID / USER CONFIGURATION
+
+The TM route must preserve the existing user’s UUID/config identity.
+
+Do not create a new unrelated UUID system.
+
+For a user UUID:
+
+/ws/TM/
+
+or
+
+/ws/nextTM/
+
+must resolve to the correct chain behavior.
+
+The existing SpiderPanel subscription/config generation must remain compatible.
+
+If the current project has a config-generation abstraction, integrate TM into it instead of duplicating config-generation code.
+
+⸻
+
+11. SET SERVER + CONFIG GENERATION
+
+If the user presses Set on a server:
+
+	•	mark it as the active configuration-generation server
+	•	persist the selection
+	•	use that server when generating the user’s configuration
+	•	update generated routes appropriately
+	•	regenerate/update affected configs when required
+
+Example:
+
+A → B → C
+
+If A is Set:
+
+generated client config enters A.
+
+If B is Set:
+
+generated client config enters B and follows B’s downstream chain according to the graph.
+
+If C is Set:
+
+generated client config enters C directly.
+
+Do not merely highlight the server.
+
+The selection must affect actual generated configuration.
+
+⸻
+
+12. MULTI-SERVER SYNCHRONIZATION
+
+The system must understand that each remote server is an actual SpiderPanel/TM participant.
+
+Use authenticated communication between servers.
+
+Prefer the existing API-key/SPI-key node authentication mechanism already present in SpiderPanel.
+
+Do NOT expose API keys in:
+
+	•	HTML
+	•	JavaScript
+	•	graph state
+	•	logs
+	•	generated config
+	•	browser localStorage
+
+API keys should remain server-side.
+
+The browser should only receive safe metadata such as:
+
+	•	node ID
+	•	name
+	•	domain
+	•	status
+	•	masked key
+	•	latency
+
+⸻
+
+13. SERVER ROLE DISCOVERY
+
+Every TM participant must be able to determine its role from the graph/configuration.
+
+The server should know:
+
+	•	Its own node ID
+	•	Previous node
+	•	Next node
+	•	Whether it is Initial
+	•	Whether it is Middle
+	•	Whether it is Final
+	•	Its next TM route
+	•	Its upstream TM route if required
+
+Do not require manually setting these values.
+
+The central TM graph/configuration should be translated into a deterministic topology configuration.
+
+⸻
+
+14. CONNECTION EDITING
+
+Connections should be editable.
+
+The user must be able to:
+
+	•	Create connection
+	•	Select destination server
+	•	Change destination
+	•	Delete connection
+	•	Switch straight/curved style
+
+Connections should visually show direction.
+
+Use an arrowhead or another subtle directional indicator.
+
+Example:
+
+[A] ─────────→ [B] ─────────→ [C]
+
+The graph should clearly communicate traffic direction.
+
+⸻
+
+15. PING BETWEEN FIRST AND LAST SERVER
+
+Add a Ping button for a selected chain.
+
+When clicked, calculate/display latency between the first and last relevant server in the chain.
+
+This is different from the client-side ping.
+
+The UI should clearly distinguish:
+
+Client Ping
+and
+Server-to-Server Ping
+
+Example:
+
+Client → A: 72 ms
+
+A → B → C:
+Chain latency: 168 ms
+
+Do not label a server-side measurement as client ping.
+
+⸻
+
+16. GRAPH PHYSICS
+
+The graph should feel polished.
+
+Requirements:
+
+	•	Smooth node dragging
+	•	Connections follow nodes
+	•	Curved lines should have natural curves
+	•	Avoid excessive animation
+	•	Good mobile performance
+	•	No huge CPU usage
+	•	No memory leak
+	•	No continuous polling loop that consumes battery
+	•	Use throttled/debounced updates where appropriate
+
+The graph should remain usable with many nodes.
+
+⸻
+
+17. PERSISTENCE
+
+Persist:
+
+	•	Servers
+	•	Node positions
+	•	Connections
+	•	Connection style
+	•	Active Set server
+	•	TM configuration
+	•	Graph topology
+
+Reloading the page must restore the same graph.
+
+Do NOT store sensitive API keys in browser localStorage.
+
+Node positions can safely be stored server-side.
+
+⸻
+
+18. RESPONSIVE MOBILE UI
+
+The existing SpiderPanel is heavily used on mobile.
+
+TM must work properly on:
+
+	•	iPhone Safari
+	•	Android Chrome
+	•	Desktop browsers
+
+Touch requirements:
+
+	•	Long press to drag nodes
+	•	Tap to open node controls
+	•	Pinch zoom if practical
+	•	●	/ − zoom buttons always available
+	•	Avoid accidental page scrolling while interacting with the graph
+	•	Node controls must be large enough to tap
+
+⸻
+
+19. EXISTING CODE INTEGRATION
+
+Before implementation inspect and reuse:
+
+	•	Existing /api/nodes endpoints
+	•	Existing Node model/storage
+	•	Existing Node health/ping system
+	•	Existing authentication
+	•	Existing inbound model
+	•	Existing config generation
+	•	Existing user UUID handling
+	•	Existing subscription generation
+	•	Existing WebSocket/WS handling
+	•	Existing worker/tunnel implementation
+	•	Existing CSS variables/theme system
+	•	Existing accordion components
+	•	Existing modal components
+	•	Existing API helper
+	•	Existing localization/i18n
+
+Do not duplicate existing Node functionality.
+
+The current project already has Nodes functionality. Extend it where appropriate.
+
+⸻
+
+20. BACKEND API DESIGN
+
+Add a clean TM API namespace, for example:
+
+GET    /api/tm
+POST   /api/tm/servers
+PATCH  /api/tm/servers/{id}
+DELETE /api/tm/servers/{id}
+
+GET    /api/tm/graph
+PUT    /api/tm/graph
+
+POST   /api/tm/servers/{id}/ping
+
+POST   /api/tm/graph/validate
+POST   /api/tm/apply
+
+GET    /api/tm/status
+
+POST   /api/tm/generate
+
+Exact endpoint names may be changed if the existing architecture has better conventions.
+
+The important point is clean separation between:
+
+	•	server management
+	•	graph management
+	•	graph validation
+	•	applying topology
+	•	configuration generation
+	•	status/health
+
+⸻
+
+21. GRAPH VALIDATION
+
+Before applying a graph, validate it.
+
+Reject:
+
+	•	self loops
+	•	duplicate edges
+	•	invalid node IDs
+	•	cycles
+	•	disconnected nodes when the selected topology requires connectivity
+	•	multiple conflicting initial paths where unsupported
+	•	ambiguous routing
+	•	missing final destination
+	•	invalid TM route generation
+
+Show a useful error message.
+
+Example:
+
+“Invalid TM topology: cycle detected between Node A and Node C.”
+
+Do not silently create broken configs.
+
+⸻
+
+22. APPLY BUTTON
+
+Add an explicit:
+
+Apply Tunnel
+
+or
+
+Apply TM
+
+button.
+
+The user should be able to visually edit the graph without immediately changing the live tunnel.
+
+Workflow:
+
+Edit graph
+↓
+Validate
+↓
+Apply TM
+↓
+Generate/update routing
+↓
+Synchronize participating servers
+↓
+Show result/status
+
+Display progress.
+
+Example:
+
+✓ Graph validated
+✓ Server A updated
+✓ Server B updated
+✓ Server C updated
+✓ TM configuration applied
+
+If one server fails, clearly identify which server failed.
+
+⸻
+
+23. SAFE ROLLBACK
+
+Before applying a new topology, keep the previous TM topology/configuration.
+
+If application fails midway:
+
+	•	preserve the previous known-good topology
+	•	report the failed server
+	•	do not leave half-generated routing if avoidable
+
+If practical, implement transactional/rollback behavior.
+
+⸻
+
+24. STATUS DISPLAY
+
+Show the TM state globally:
+
+TM Status:
+
+	•	Active / Inactive
+	•	Number of servers
+	•	Number of connections
+	•	Active Set server
+	•	Current chain
+	•	Last Apply
+	•	Last error
+
+Example:
+
+TM Active
+3 Servers
+2 Links
+Entry: Germany
+Exit: Netherlands
+Last Apply: 21:14
+
+⸻
+
+25. IMPORTANT ARCHITECTURE RULE
+
+The visual graph is NOT the tunnel itself.
+
+The graph is the source of truth from which the real tunnel configuration is generated.
+
+Therefore:
+
+Graph
+→ topology validation
+→ role calculation
+→ route calculation
+→ TM inbound/routes
+→ remote server synchronization
+→ actual tunnel/config generation
+
+Never implement a fake visual graph where the lines look connected but the backend does nothing.
+
+Every graph change that is applied must produce real backend configuration.
+
+⸻
+
+26. EXAMPLE
+
+If the user creates:
+
+Iran → Germany → Netherlands
+
+The system should automatically determine:
+
+Iran:
+Role = Initial
+Next = Germany
+
+Germany:
+Role = Middle
+Previous = Iran
+Next = Netherlands
+
+Netherlands:
+Role = Final
+Previous = Germany
+Next = Destination
+
+The generated client route enters Iran.
+
+Iran forwards through TM to Germany.
+
+Germany forwards through TM to Netherlands.
+
+Netherlands exits to the destination.
+
+If the graph is changed to:
+
+Iran → Netherlands
+
+Then Germany automatically becomes disconnected and should no longer participate in this chain.
+
+If the graph is:
+
+Iran
+
+with no outgoing edge:
+
+Iran becomes Initial + Final.
+
+The generated route uses:
+
+ws/TM/
+
+If Iran has a next node:
+
+ws/nextTM/
+
+The system determines the correct next hop automatically.
+
+⸻
+
+27. DO NOT BREAK EXISTING NODE SYSTEM
+
+Existing Nodes should continue to work exactly as before.
+
+TM may reuse the same node records, but TM-specific topology state must be separate from ordinary node metadata.
+
+Do not rename/remove existing Nodes functionality.
+
+Do not break:
+
+	•	user sync
+	•	inbound sync
+	•	subscriptions
+	•	existing node health checks
+	•	existing worker
+	•	existing Auto Config
+	•	existing authentication
+
+⸻
+
+28. UI QUALITY
+
+The design should match the existing SpiderPanel visual language:
+
+	•	dark/glass UI
+	•	rounded cards
+	•	existing neon/accent system
+	•	smooth transitions
+	•	compact spacing
+	•	responsive mobile layout
+	•	existing buttons/icons
+	•	no generic ugly admin dashboard
+
+The Configure canvas should feel like a polished network topology editor.
+
+⸻
+
+29. IMPLEMENTATION PROCESS
+
+Do NOT immediately start rewriting files.
+
+First:
+
+	1.	Inspect repository architecture.
+	2.	Identify existing Node backend/storage.
+	3.	Identify existing inbound/config-generation code.
+	4.	Identify existing WS routing.
+	5.	Identify existing authentication/API-key handling.
+	6.	Identify existing frontend tab/navigation architecture.
+	7.	Identify existing CSS/accordion/modal components.
+	8.	Design the smallest compatible TM architecture.
+	9.	Implement backend.
+	10.	Implement frontend.
+	11.	Integrate configuration generation.
+	12.	Add graph validation.
+	13.	Add apply/synchronization.
+	14.	Test all topology cases.
+
+⸻
+
+30. REQUIRED TEST CASES
+
+Test at minimum:
+
+	1.	One server:
+    A
+	2.	Two servers:
+    A → B
+	3.	Three servers:
+    A → B → C
+	4.	Four servers:
+    A → B → C → D
+	5.	Change:
+    A → B → C
+    to
+    A → C
+	6.	Remove middle server.
+	7.	Disconnect server.
+	8.	Try self-loop.
+	9.	Try cycle:
+    A → B → C → A
+	10.	Set A.
+	11.	Set B.
+	12.	Set C.
+	13.	Refresh browser and verify graph persistence.
+	14.	Mobile touch dragging.
+	15.	Client-side browser ping.
+	16.	Server-side health check.
+	17.	Failed remote server.
+	18.	Failed Apply.
+	19.	API key must never appear in frontend source/localStorage/logs.
+	20.	Existing SpiderPanel functionality still works after TM implementation.
+
+⸻
+
+FINAL REQUIREMENT
+
+Do not give me a mockup, pseudo-code-only implementation, or an explanation of what could be done.
+
+Implement the feature directly in the existing SpiderPanel codebase.
+
+After implementation, provide:
+
+	1.	Files changed
+	2.	Backend APIs added/modified
+	3.	Frontend components added
+	4.	TM topology/routing algorithm
+	5.	How client-side ping works
+	6.	How ws/TM/ and ws/nextTM/ are resolved
+	7.	How server roles are calculated
+	8.	How Apply synchronizes the chain
+	9.	Tests performed
+	10.	Any limitations or architecture decisions
+
+Most importantly:
+
+The TM graph must be a real functional tunnel-management system. The visual connections, server roles, Set selection, TM inbound, routing paths, and generated configurations must all correspond to actual backend behavior.
